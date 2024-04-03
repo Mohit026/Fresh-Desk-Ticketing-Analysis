@@ -1,0 +1,81 @@
+import sys
+import psycopg2
+import boto3
+import pandas as pd
+# Redshift connection details
+redshift_host = 'redshift-cluster-1.cofnayqxzhhk.ap-south-1.redshift.amazonaws.com'
+redshift_port = '5439'
+redshift_db = 'dev'
+redshift_user = 'awsuser'
+redshift_password = '*******'
+# S3 location of your data files
+# Connect to Redshift and execute the COPY command
+conn = psycopg2.connect(
+    dbname=redshift_db,
+    user=redshift_user,
+    password=redshift_password,
+    host=redshift_host,
+    port=redshift_port
+)
+
+ 
+cursor = conn.cursor()
+
+create_table_query = '''
+    CREATE TABLE IF NOT EXISTS Tick(
+        due_by VARCHAR,
+        id INT,
+        is_escalated VARCHAR,
+        priority INT,
+        source INT,
+        status INT,
+        subject VARCHAR,
+        updated_at VARCHAR,
+        created_at VARCHAR
+    );'''
+cursor.execute(create_table_query)
+conn.commit()
+
+print("table created")
+tb = ''' DELETE from Tick'''
+cursor.execute(tb)
+conn.commit()
+
+
+
+
+s3 = boto3.client('s3')
+
+def get_latest_file(bucket_name, folder_prefix):
+    response = s3.list_objects_v2(Bucket=bucket_name, Prefix=folder_prefix)
+    latest_object = max(response['Contents'], key=lambda obj: obj['LastModified'])
+    latest_file_key = latest_object['Key']
+    return latest_file_key
+
+bucket_name = 'receiving-tickets'
+folder_prefix = 'FreshDesk_flow/'
+latest_file_key = get_latest_file(bucket_name, folder_prefix)
+
+copy_query = f"COPY Tick FROM 's3://receiving-tickets/{latest_file_key}' IAM_ROLE 'arn:aws:iam::157539327346:role/service-role/AmazonRedshift-CommandsAccessRole-20240321T152646' CSV IGNOREHEADER 1;"
+cursor.execute(copy_query)
+conn.commit()
+
+q = '''UPDATE tick
+SET due_by = SUBSTRING(due_by, 1, LENGTH(due_by) - 1),
+ updated_at = SUBSTRING(updated_at,1,LENGTH(updated_at)-1),
+ created_at = SUBSTRING(created_at,1,LENGTH(created_at)-1)'''
+cursor.execute(q)
+conn.commit()
+
+q = '''UPDATE tick
+SET due_by = REPLACE(due_by, 'T', ' '),
+ updated_at = REPLACE(updated_at, 'T', ' '),
+ created_at = REPLACE(created_at, 'T', ' ')'''
+cursor.execute(q)
+conn.commit()
+
+cursor.close()
+conn.close()
+
+
+
