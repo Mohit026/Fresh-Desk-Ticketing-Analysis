@@ -1,0 +1,45 @@
+import boto3
+
+def lambda_handler(event, context):
+    # Specify the S3 bucket name and folder prefix
+    bucket_name = 'layering-bucket'
+    folder_prefix = 'FreshDesk_flow/'  # Specify the folder prefix here
+    destination_bucket_name = 'receiving-tickets'
+    # Create an S3 client
+    s3_client = boto3.client('s3')
+
+    try:
+        # List objects in the specified folder and its subfolders
+        response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=folder_prefix)
+
+        # Check if any objects were found
+        if 'Contents' in response:
+            # Sort the list of objects based on their last modified timestamp
+            sorted_objects = sorted(response['Contents'], key=lambda x: x['LastModified'], reverse=True)
+            # Get the key of the latest file
+            latest_object_key = sorted_objects[0]['Key']
+            # Get the object from S3
+            response = s3_client.get_object(Bucket=bucket_name, Key=latest_object_key)
+            # Read the contents of the object
+            object_data = response['Body'].read()
+            s3_client.put_object(Bucket=destination_bucket_name, Key=latest_object_key, Body=object_data)
+            # Return the object data
+            return {
+                'statusCode': 200,
+                'body': object_data
+            }
+        else:
+            # Return a message if no objects were found in the folder
+            return {
+                'statusCode': 404,
+                'body': "No objects found in the specified folder."
+            }
+        
+    except Exception as e:
+        print(f"Error reading objects from folder {folder_prefix} in bucket {bucket_name}: {e}")
+
+        # Return an error response
+        return {
+            'statusCode': 500,
+            'body': f"Error reading objects: {e}"
+        }
