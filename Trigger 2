@@ -1,0 +1,39 @@
+import boto3
+
+def lambda_handler(event, context):
+    # Specify the Glue job name
+    glue_job_name = 'Red-test'
+    
+    # Specify the Glue job arguments (if any)
+    # For example, you might pass parameters or configuration settings to the Glue job
+    glue_job_arguments = {
+        # 'argument_name': 'argument_value'
+    }
+    
+    # Create a Glue client
+    glue_client = boto3.client('glue')
+    
+    try:
+        # Start the Glue job run
+        response = glue_client.start_job_run(JobName=glue_job_name, Arguments=glue_job_arguments)
+        
+        # Get the job run ID
+        job_run_id = response['JobRunId']
+        
+        # Print the job run ID
+        print(f"Started Glue job run {job_run_id}")
+        
+        # Return success response
+        return {
+            'statusCode': 200,
+            'body': f"Started Glue job run {job_run_id}"
+        }
+    
+    except Exception as e:
+        print(f"Error starting Glue job {glue_job_name}: {e}")
+        
+        # Return an error response
+        return {
+            'statusCode': 500,
+            'body': f"Error starting Glue job: {e}"
+        }
